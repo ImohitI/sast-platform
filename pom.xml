@@ -18,6 +18,13 @@
     <name>sast-platform</name>
     <description>Ingest API + Kafka consumer for SAST scan results</description>
 
+    <licenses>
+        <license>
+            <name>Apache-2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+        </license>
+    </licenses>
+
     <modules>
         <module>contracts</module>
         <module>ingest-api</module>

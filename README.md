@@ -68,3 +68,7 @@ mvn verify    # + ConsumerIT: real Kafka, Postgres, Redis via Testcontainers (ne
 | E3 Postgres down | `docker compose stop postgres` for 2 minutes while sending builds; watch lag in Kafka UI, then `start` it |
 | E4 burst | `docker compose --profile load run --rm k6` |
 | E5 Redis down | `docker compose stop redis`, load the dashboard |
+
+## License
+
+[Apache-2.0](LICENSE)
