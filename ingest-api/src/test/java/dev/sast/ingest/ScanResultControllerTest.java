@@ -35,10 +35,10 @@ class ScanResultControllerTest {
               "buildId": 1052,
               "commitSha": "a1b2c3d",
               "scannedAt": "2026-10-26T18:00:00Z",
-              "tools": [{"name": "semgrep", "version": "1.182.1"}],
+              "tools": [{"name": "opengrep", "version": "1.32.0"}],
               "findings": [{
                 "fingerprint": "1f0e3dad99908345f7439f8ffabdffc4c4f1b4a6f1b6c5d0d1e8b4e1f1a2b3c4",
-                "cwe": "CWE-89", "ruleId": "python.sqli", "foundBy": ["semgrep"], "severity": "HIGH",
+                "cwe": "CWE-89", "ruleId": "python.sqli", "foundBy": ["opengrep"], "severity": "HIGH",
                 "file": "python/app.py", "line": 20, "message": "sqli",
                 "ai": {"verdict": "likely_tp", "confidence": 0.9, "reason": "tainted", "suggestedFix": "bind params"}
               }]

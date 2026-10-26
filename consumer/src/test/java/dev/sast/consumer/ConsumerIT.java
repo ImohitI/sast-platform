@@ -152,9 +152,9 @@ class ConsumerIT {
         return """
                 {
                   "repoId": "%s", "buildId": %d, "commitSha": "abc%d", "scannedAt": "2026-10-26T18:00:00Z",
-                  "tools": [{"name": "semgrep", "version": "1.182.1"}],
+                  "tools": [{"name": "opengrep", "version": "1.32.0"}],
                   "findings": [
-                    {"fingerprint": "%s", "cwe": "CWE-89", "ruleId": "python.sqli", "foundBy": ["semgrep", "bandit"],
+                    {"fingerprint": "%s", "cwe": "CWE-89", "ruleId": "python.sqli", "foundBy": ["opengrep", "bandit"],
                      "severity": "HIGH", "file": "python/app.py", "line": 20, "message": "sqli",
                      "ai": {"verdict": "likely_tp", "confidence": 0.9, "reason": "tainted", "suggestedFix": "use bind parameters"}},
                     {"fingerprint": "%s", "cwe": "CWE-78", "ruleId": "python.cmdi", "foundBy": ["bandit"],

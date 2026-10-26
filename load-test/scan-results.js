@@ -43,7 +43,7 @@ export default function (data) {
       fingerprint: crypto.sha256(`CWE-89|${file}|${i + 1}`, 'hex'),
       cwe: 'CWE-89',
       ruleId: 'load.test.rule',
-      foundBy: ['semgrep'],
+      foundBy: ['opengrep'],
       severity: ['HIGH', 'MEDIUM', 'LOW'][i % 3],
       file,
       line: i + 1,
