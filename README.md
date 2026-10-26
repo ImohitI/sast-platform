@@ -8,8 +8,6 @@ Backend + infra for the SAST pipeline POC: `ingest-api` → Kafka → `consumer`
                                                                                                   └─► DEL Redis latest:{repoId}
 ```
 
-The reasoning behind every choice is in `101-prep/pocs/sast-dashboard/DESIGN.md`.
-
 ## Modules and folders
 
 | Path | What it is |
@@ -25,7 +23,7 @@ The reasoning behind every choice is in `101-prep/pocs/sast-dashboard/DESIGN.md`
 
 ## Run
 
-Prerequisites: Docker (Desktop with WSL integration on), Java 25, Maven. The repos `samples` and `os-sast` checked out next to this one.
+Prerequisites: Docker with Compose v2 (Docker Engine or Docker Desktop), Java 25, Maven. The repos `samples` and `os-sast` checked out next to this one.
 
 ```bash
 # 1. infra only, run the apps from the IDE / mvn (fast edit loop)
