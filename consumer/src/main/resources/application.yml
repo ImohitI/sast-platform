@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: consumer
+  main:
+    web-application-type: none
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://localhost:5432/sast
+    username: sast
+    password: sast   # local POC only
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: scan-results-writer
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+      properties:
+        spring.json.value.default.type: dev.sast.contracts.ScanResult
+        spring.json.use.type.headers: false
+
+sast:
+  topic: scan-results
