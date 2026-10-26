@@ -6,7 +6,7 @@ spring:
     name: ingest-api
   threads:
     virtual:
-      enabled: true
+      enabled: true    # request threads mostly wait for the Kafka ack: cheap with virtual threads
   kafka:
     bootstrap-servers: localhost:9092
     producer:
@@ -15,6 +15,20 @@ spring:
       acks: all
       properties:
         spring.json.add.type.headers: false
+        enable.idempotence: true       # default since Kafka 3.0; stated so it's visible
+        # Fail fast instead of hanging the request when the broker is down:
+        max.block.ms: 5000             # send() waits at most 5 s for metadata / buffer space
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000     # the producer gives up (future fails) after 10 s in total
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
 
 sast:
   topic: scan-results
+  # Slightly longer than delivery.timeout.ms, so normally the producer's own failure ends the wait.
+  # If this timer fired first, the record could still be delivered after we answered 503 -> a duplicate on retry.
+  ack-timeout: 12s

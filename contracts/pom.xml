@@ -13,4 +13,13 @@
     <artifactId>contracts</artifactId>
     <name>contracts</name>
     <description>The scan-result message format shared by ingest-api and consumer</description>
+
+    <dependencies>
+        <!-- API only (annotations), no validator implementation: the contract describes its rules,
+             each service decides where to enforce them. -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
+    </dependencies>
 </project>

@@ -1,4 +1,6 @@
 package dev.sast.contracts;
 
-public record Tool(String name, String version) {
+import jakarta.validation.constraints.NotBlank;
+
+public record Tool(@NotBlank String name, String version) {
 }

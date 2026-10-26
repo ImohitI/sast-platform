@@ -1,5 +1,11 @@
-# Infra only. Apps on the laptop use localhost:9092; containers inside Compose use kafka:29092.
-# Jenkins is added in step 4.
+# Profiles:
+#   docker compose up -d                          infra only (Kafka, Kafka UI, Postgres, Redis); run the apps with mvn
+#   docker compose --profile apps up -d --build   + ingest-api and consumer as containers (needed for E1/E2)
+#   docker compose --profile ci up -d --build     + Jenkins (also start "apps", Jenkins posts to ingest-api)
+#   docker compose --profile load run --rm k6     k6 burst test against ingest-api (E4)
+#
+# Addresses: apps on the laptop use localhost:<port>; containers use the service name (kafka:29092, postgres:5432, ...).
+# No volumes for Kafka/Postgres/Redis: `docker compose down` gives every experiment a clean slate.
 services:
   kafka:
     image: apache/kafka:3.9.0
@@ -16,7 +22,31 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_NUM_PARTITIONS: 2
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Topics are created on purpose by kafka-init. A typo in a topic name should fail loudly,
+      # not silently create a 1-partition topic.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  kafka-init:
+    image: apache/kafka:3.9.0
+    depends_on:
+      kafka: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "-c"]
+    # 2 partitions on purpose (E2). The DLT needs as many partitions as the topic: a dead letter goes to the same
+    # partition number it came from.
+    command:
+      - |
+        for t in scan-results scan-results.DLT; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists \
+            --topic "$$t" --partitions 2 --replication-factor 1
+        done
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --describe --topic scan-results
+    restart: "no"
 
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.0.0
@@ -33,7 +63,75 @@ services:
       POSTGRES_DB: sast
       POSTGRES_USER: sast
       POSTGRES_PASSWORD: sast       # local POC only
+    volumes:
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sast -d sast"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   redis:
     image: redis:7.2
     ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ingest-api:
+    profiles: [apps]
+    build: { context: ., args: { MODULE: ingest-api } }
+    ports: ["8080:8080"]
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    # Note: ingest-api does NOT depend on postgres. That is the point (E3).
+
+  consumer:
+    profiles: [apps]
+    build: { context: ., args: { MODULE: consumer } }
+    # No container_name and no host port, so `--scale consumer=2` works (E2).
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/sast
+      SPRING_DATA_REDIS_HOST: redis
+      SAST_CONSUMER_CONCURRENCY: ${CONSUMER_CONCURRENCY:-2}
+      SAST_CONSUMER_DEBUG_SLEEP: ${CONSUMER_DEBUG_SLEEP:-0s}
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }    # Redis is optional at runtime; don't wait for it to be healthy
+
+  jenkins:
+    profiles: [ci]
+    build:
+      context: ./jenkins
+      additional_contexts:
+        os-sast: ../os-sast
+    ports: ["8090:8080"]
+    environment:
+      INGEST_URL: http://ingest-api:8080
+      OLLAMA_URL: http://host.docker.internal:11434
+      JAVA_OPTS: >-
+        -Djenkins.install.runSetupWizard=false
+        -Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../samples:/repos/samples:ro      # Jenkins polls this git repo; commit to it and a build starts
+      - jenkins_home:/var/jenkins_home
+
+  k6:
+    profiles: [load]
+    image: grafana/k6:1.3.0
+    environment:
+      INGEST_URL: http://ingest-api:8080
+    volumes:
+      - ./load-test:/scripts:ro
+    command: ["run", "/scripts/scan-results.js"]
+
+volumes:
+  jenkins_home:

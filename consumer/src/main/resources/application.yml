@@ -10,20 +10,33 @@ spring:
     url: jdbc:postgresql://localhost:5432/sast
     username: sast
     password: sast   # local POC only
+    hikari:
+      connection-timeout: 5000   # fail fast when Postgres is down, so the error handler's backoff takes over
   data:
     redis:
       host: localhost
       port: 6379
+      timeout: 500ms           # a Redis outage must cost ~0.5 s, not the 60 s default
+      connect-timeout: 500ms
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
       group-id: scan-results-writer
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+      # ErrorHandlingDeserializer catches bad bytes and hands them to the error handler (-> DLT)
+      # instead of failing inside poll() forever. Jackson does the real work as its delegate.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
         spring.json.value.default.type: dev.sast.contracts.ScanResult
         spring.json.use.type.headers: false
+    producer:
+      # only used to publish dead letters
+      acks: all
 
 sast:
   topic: scan-results
+  consumer:
+    concurrency: 2       # = partitions. Try 3 for experiment E2.
+    debug-sleep: 0s      # experiment E1: e.g. 10s, then kill the consumer during the sleep

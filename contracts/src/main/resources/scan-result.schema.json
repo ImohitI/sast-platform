@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sast.dev/contracts/scan-result.schema.json",
+  "title": "ScanResult",
+  "description": "One scan of one build. The os-sast output, the POST /api/scan-results body and the Kafka message all have this shape. Keep it in step with the records in dev.sast.contracts.",
+  "type": "object",
+  "required": ["repoId", "buildId", "scannedAt", "tools", "findings"],
+  "properties": {
+    "repoId":    { "type": "string", "minLength": 1 },
+    "buildId":   { "type": "integer", "minimum": 1 },
+    "commitSha": { "type": ["string", "null"] },
+    "scannedAt": { "type": "string", "format": "date-time" },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name":    { "type": "string", "minLength": 1 },
+          "version": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["fingerprint", "ruleId", "foundBy", "severity", "file", "line"],
+      "properties": {
+        "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256(cwe|file|line), hex" },
+        "cwe":         { "type": ["string", "null"], "pattern": "^CWE-[0-9]+$" },
+        "ruleId":      { "type": "string", "minLength": 1 },
+        "foundBy":     { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "severity":    { "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+        "file":        { "type": "string", "minLength": 1 },
+        "line":        { "type": "integer", "minimum": 0 },
+        "message":     { "type": ["string", "null"] },
+        "ai": {
+          "description": "null when triage was off. The AI only annotates; it never removes a finding.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["verdict", "confidence"],
+              "properties": {
+                "verdict":      { "enum": ["likely_tp", "likely_fp"] },
+                "confidence":   { "type": "number", "minimum": 0, "maximum": 1 },
+                "reason":       { "type": ["string", "null"] },
+                "suggestedFix": { "type": ["string", "null"] }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
