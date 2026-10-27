@@ -1,6 +1,7 @@
 package dev.sast.consumer;
 
 import dev.sast.contracts.ScanResult;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,8 +33,10 @@ public class KafkaErrorHandlingConfig {
 
     @Bean
     DefaultErrorHandler errorHandler(KafkaTemplate<Object, Object> deadLetterTemplate) {
-        // Default destination: <topic>.DLT, same partition number. So the DLT needs at least as many partitions.
-        var recoverer = new DeadLetterPublishingRecoverer(deadLetterTemplate);
+        // <topic>.DLT, same partition number, so the DLT needs at least as many partitions. Set explicitly:
+        // Spring Kafka 4 changed the default to <topic>-dlt, a topic kafka-init doesn't create (and auto-create is off).
+        var recoverer = new DeadLetterPublishingRecoverer(deadLetterTemplate,
+                (record, exception) -> new TopicPartition(record.topic() + ".DLT", record.partition()));
 
         var backOff = new ExponentialBackOff(1_000, 2.0);
         backOff.setMaxInterval(30_000);   // 1 s, 2 s, 4 s ... then every 30 s; no limit on attempts

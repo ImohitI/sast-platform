@@ -7,6 +7,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterAll;
@@ -131,19 +132,26 @@ class ConsumerIT {
                 Integer.class, repoId, buildId);
     }
 
+    // Reads every DLT partition from the start, without a consumer group (no join or rebalance to wait for),
+    // polling on the test thread: KafkaConsumer is not thread-safe, and Awaitility evaluates conditions elsewhere.
     private List<String> deadLetterValues() {
         try (var consumer = new KafkaConsumer<String, String>(Map.of(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
-                ConsumerConfig.GROUP_ID_CONFIG, "dlt-reader",
-                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class))) {
-            consumer.subscribe(List.of("scan-results.DLT"));
+            List<TopicPartition> partitions = consumer.partitionsFor("scan-results.DLT", Duration.ofSeconds(10)).stream()
+                    .map(info -> new TopicPartition(info.topic(), info.partition()))
+                    .toList();
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
             List<String> values = new ArrayList<>();
-            await().atMost(Duration.ofSeconds(20)).until(() -> {
+            long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+            while (values.isEmpty() && System.nanoTime() < deadline) {
                 consumer.poll(Duration.ofMillis(500)).forEach((ConsumerRecord<String, String> r) -> values.add(r.value()));
-                return !values.isEmpty();
-            });
+            }
+            assertThat(values)
+                    .as("dead letters; DLT end offsets = %s", consumer.endOffsets(partitions))
+                    .isNotEmpty();
             return values;
         }
     }
