@@ -47,7 +47,7 @@ class ConsumerIT {
 
     @Container
     @ServiceConnection
-    static KafkaContainer kafka = new KafkaContainer("apache/kafka:3.9.0");
+    static KafkaContainer kafka = new KafkaContainer("apache/kafka:3.9.1");
 
     @Container
     @ServiceConnection(name = "redis")

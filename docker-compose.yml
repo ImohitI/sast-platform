@@ -8,7 +8,7 @@
 # No volumes for Kafka/Postgres/Redis: `docker compose down` gives every experiment a clean slate.
 services:
   kafka:
-    image: apache/kafka:3.9.0
+    image: apache/kafka:3.9.1
     ports: ["9092:9092"]
     environment:
       KAFKA_NODE_ID: 1
@@ -33,7 +33,7 @@ services:
       retries: 30
 
   kafka-init:
-    image: apache/kafka:3.9.0
+    image: apache/kafka:3.9.1
     depends_on:
       kafka: { condition: service_healthy }
     entrypoint: ["/bin/sh", "-c"]
