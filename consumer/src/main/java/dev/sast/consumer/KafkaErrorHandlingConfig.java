@@ -2,19 +2,18 @@ package dev.sast.consumer;
 
 import dev.sast.contracts.ScanResult;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.DelegatingByTypeSerializer;
 import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 import org.springframework.util.backoff.ExponentialBackOff;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -48,11 +47,14 @@ public class KafkaErrorHandlingConfig {
     /**
      * Dead letters carry either the original bytes (deserialization failed) or a ScanResult (the write failed),
      * so the value serializer is chosen by type.
+     *
+     * The config is copied from Boot's producer factory, which already has the broker address from
+     * KafkaConnectionDetails. Building it from KafkaProperties would ignore a Testcontainers @ServiceConnection and
+     * point at localhost:9092: every dead letter would then fail to publish, and the partition would retry forever.
      */
     @Bean
-    KafkaTemplate<Object, Object> deadLetterTemplate(KafkaProperties properties) {
-        Map<String, Object> config = new LinkedHashMap<>(properties.buildProducerProperties());
-        var factory = new DefaultKafkaProducerFactory<Object, Object>(config);
+    KafkaTemplate<Object, Object> deadLetterTemplate(ProducerFactory<Object, Object> producerFactory) {
+        var factory = new DefaultKafkaProducerFactory<Object, Object>(producerFactory.getConfigurationProperties());
         factory.setValueSerializer(new DelegatingByTypeSerializer(Map.of(
                 byte[].class, new ByteArraySerializer(),
                 ScanResult.class, new JacksonJsonSerializer<ScanResult>().noTypeInfo())));
