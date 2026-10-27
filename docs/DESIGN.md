@@ -16,7 +16,7 @@ Contents:
 8. [Postgres schema](#8-postgres-schema)
 9. [Redis cache](#9-redis-cache)
 10. [Upstream and downstream](#10-upstream-and-downstream)
-11. [Bugs found in the first scaffold](#11-bugs-found-in-the-first-scaffold)
+11. [Bugs found and fixed](#11-bugs-found-and-fixed)
 12. [Which experiment tests which decision](#12-which-experiment-tests-which-decision)
 13. [Production follow-ups](#13-production-follow-ups)
 14. [Self-check questions](#14-self-check-questions)
@@ -380,7 +380,7 @@ Poll SCM (`H/2 * * * *`) needs no network setup. A GitHub webhook is instant but
 
 ---
 
-## 11. Bugs found in the first scaffold
+## 11. Bugs found and fixed
 
 Found in `sast-platform` on 26 Oct (commit `c03b166`). Each one broke a guarantee above. All were fixed in the end-to-end implementation the same day.
 
@@ -393,6 +393,16 @@ Found in `sast-platform` on 26 Oct (commit `c03b166`). Each one broke a guarante
 - [x] **Consumer not in compose yet.** **Fixed:** root `Dockerfile` (`MODULE` build arg) and an `apps` compose profile; knobs `CONSUMER_DEBUG_SLEEP` (E1) and `CONSUMER_CONCURRENCY` (E2).
 
 One more bug turned up while smoke-testing with no broker running: ingest-api returned **500 instead of 503**. `KafkaTemplate.send()` doesn't only fail through the future. When it can't get topic metadata within `max.block.ms`, it throws **Spring's** `org.springframework.kafka.KafkaException` synchronously, and the code caught Apache's class of the same name. A mock-based test had passed because the mock only failed the future. Fixed, and `brokerUnreachableBeforeSendingIs503Too` covers it. Lesson: a mock only fails the way you told it to.
+
+### Found by CI on 27 Oct
+
+`ConsumerIT` (real Kafka, Postgres and Redis through Testcontainers) had never run, because the development machine had no Docker. Its first run in GitHub Actions failed three times in a row, each fix exposing the next. Two of the three were real bugs in the consumer, not in the test.
+
+- [x] **The Kafka container exited on startup** with `advertised.listeners cannot use the nonroutable meta-address 0.0.0.0`. Kafka 3.9.0's storage-format step rejects the `CONTROLLER://0.0.0.0:9094` listener that Testcontainers configures for combined broker + controller mode; the compose file wasn't affected because it writes `CONTROLLER://:9093`. **Fixed:** `apache/kafka:3.9.1`, in the test and in compose, so the two stay identical.
+- [x] **The dead-letter producer pointed at the wrong broker.** `deadLetterTemplate` was built from `KafkaProperties`, which only knows `spring.kafka.bootstrap-servers` (`localhost:9092`). A Testcontainers `@ServiceConnection` supplies the broker through `KafkaConnectionDetails`, which only Boot's own factories apply. Every dead letter failed to publish, so the poison pill was retried forever and **its whole partition stalled**. The symptom pointed straight at it: the two failing tests' keys (`dup-repo`, `poison-repo`) both hash to partition 0, and the passing one (`cache-repo`) to partition 1. **Fixed:** the template copies the configuration of Boot's `ProducerFactory`, which already has the right address everywhere (tests, compose, IDE).
+- [x] **Dead letters went to a topic nobody reads.** Spring Kafka 4 changed `DeadLetterPublishingRecoverer`'s default destination from `<topic>.DLT` to `<topic>-dlt`. In the test the broker auto-creates topics, so poison pills quietly landed in `scan-results-dlt`. In compose auto-create is **off**, so every dead letter would have failed to publish and blocked its partition: the exact outage the DLT exists to prevent, triggered by a framework upgrade with no compile error. **Fixed:** the destination resolver is set explicitly to `<topic>.DLT`, same partition. The test's DLT reader now reads both partitions directly (no consumer group to join, no polling from another thread) and prints the DLT end offsets if it finds nothing.
+
+How it was debugged without access to the CI log (downloading logs needs a signed-in user): a CI step that runs only on failure writes each failing test's report as an annotation on the commit, and annotations are public. Lesson: an integration test that never runs proves nothing, and defaults move between major versions, so pin the names your infrastructure depends on.
 
 ---
 
@@ -448,3 +458,4 @@ Answer first, then check the section.
 12. Why can't the AI remove findings? → §10
 13. A developer adds a line above a bug. What does the diff show, and why? → §4
 14. Why do Kafka clients on the laptop and in Docker use different addresses? → §3
+15. Why is the dead-letter topic name set explicitly instead of using the framework default? → §11
