@@ -20,3 +20,17 @@ jobs:
           cache: maven
       # Unit tests, then ConsumerIT against real Kafka, Postgres and Redis (Testcontainers; the runner has Docker)
       - run: mvn -B verify
+
+      # Put the reason for a failing test on the commit as an annotation, so it can be read
+      # without opening (or downloading) the full log.
+      - name: Report test failures
+        if: failure()
+        run: |
+          for f in */target/surefire-reports/*.txt */target/failsafe-reports/*.txt; do
+            [ -f "$f" ] && grep -q -E 'FAILURE|ERROR' "$f" || continue
+            echo "::error title=$(basename "$f" .txt)::$(head -c 4000 "$f" | tr '\n' ' ')"
+          done
+          for f in */target/failsafe-reports/*-output.txt; do
+            [ -f "$f" ] || continue
+            echo "::warning title=$(basename "$f") (container lines)::$(grep -E 'Caused by|Exception:|===>|advertised|listeners|Container .* (started|failed)' "$f" | head -40 | cut -c1-300 | tr '\n' ' ')"
+          done
