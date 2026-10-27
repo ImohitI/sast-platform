@@ -5,3 +5,4 @@ target/
 .DS_Store
 *.log
 result.json
+.github/modernize/

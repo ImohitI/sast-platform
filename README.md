@@ -2,6 +2,9 @@
 
 Backend + infra for the SAST pipeline POC: `ingest-api` → Kafka → `consumer` → Postgres, plus Jenkins and the k6 load test.
 
+> Part of a SAST pipeline built from open-source parts: [samples](https://github.com/ImohitI/samples) (vulnerable code + ground truth) → [os-sast](https://github.com/ImohitI/os-sast) (scanner CLI) → **sast-platform** (ingest API, Kafka, consumer, Jenkins) → [sast-dashboard](https://github.com/ImohitI/sast-dashboard) (dashboard API + UI).  
+> Design decisions: [DESIGN.md](docs/DESIGN.md) · one scan followed end to end: [WALKTHROUGH.md](docs/WALKTHROUGH.md)
+
 ```
 [Jenkins + os-sast] ─POST─► [ingest-api :8080] ─key=repoId─► [Kafka: scan-results, 2 partitions] ◄─pull─ [consumer] ─► [Postgres]
                             validate, wait for ack, 202                                          │        └─ bad message ─► scan-results.DLT
